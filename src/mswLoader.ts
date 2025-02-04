@@ -57,7 +57,6 @@ export const mswLoader = async (context: Context) => {
   }
 
   if (window.__MSW_STORYBOOK__ && window.__MSW_STORYBOOK__.worker) {
-    setupHandlers(msw);
     return;
   }
 
