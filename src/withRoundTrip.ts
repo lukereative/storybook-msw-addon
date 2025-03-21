@@ -34,18 +34,23 @@ let status = 200;
 let moveTimeout: NodeJS.Timeout;
 let emit: (eventName: string, ...args: any) => void;
 
-const updateHandlers = () => {
-  if (!Object.keys(window.__MSW_STORYBOOK__.handlersMap).length) return;
-  if (!window.__MSW_STORYBOOK__) return;
+const updateHandlers = (preserveExisting = false) => {
+  if (
+    !window.__MSW_STORYBOOK__ ||
+    !Object.keys(window.__MSW_STORYBOOK__.handlersMap).length
+  )
+    return;
   const worker = window.__MSW_STORYBOOK__.worker;
-  worker.resetHandlers();
+  if (!preserveExisting) {
+    worker.resetHandlers();
+  }
 
   window.__MSW_STORYBOOK__.handlers?.forEach((handler) => {
-    if (!window.__MSW_STORYBOOK__.handlersMap[handler.info.header]) return;
-    const currentResponse =
-      window.__MSW_STORYBOOK__.handlersMap[handler.info.header].response;
-    const currentHandler =
-      window.__MSW_STORYBOOK__.handlersMap[handler.info.header].handler;
+    const handlerInfo =
+      window.__MSW_STORYBOOK__.handlersMap[handler.info.header];
+    if (!handlerInfo) return;
+
+    const { response: currentResponse } = handlerInfo;
 
     if ((handler as HttpHandler).info.path) {
       const httpHandler = handler as HttpHandler;
@@ -61,16 +66,13 @@ const updateHandlers = () => {
     } else if ((handler as GraphQLHandler).info.operationName) {
       const graphQLHandler = handler as GraphQLHandler;
       worker.use(
-        graphql.query(
-          graphQLHandler.info.operationName,
-          async ({ query, variables }) => {
-            await delay(responseDelay);
-            return HttpResponse.json(
-              { ...currentResponse.jsonBodyData },
-              { status: status },
-            );
-          },
-        ),
+        graphql.query(graphQLHandler.info.operationName, async () => {
+          await delay(responseDelay);
+          return HttpResponse.json(
+            { ...currentResponse.jsonBodyData },
+            { status: status },
+          );
+        }),
       );
     }
   });
@@ -88,60 +90,72 @@ export const withRoundTrip = (
   }
 
   if (ctx.parameters.msw.handlers) {
-    // Get handlers from story parameters
     if (!window.__MSW_STORYBOOK__.handlers)
       window.__MSW_STORYBOOK__.handlers = ctx.parameters.msw
         .handlers as RequestHandler[];
-    // Initialize handlersMap to store responses
     if (!window.__MSW_STORYBOOK__.handlersMap)
       window.__MSW_STORYBOOK__.handlersMap = {};
-    // Define events to listen to from the addon panel
 
     emit = useChannel({
       [EVENTS.UPDATE]: ({ key, value }) => {
-        if (key === "delay") {
-          clearTimeout(moveTimeout);
-          responseDelay = value;
-          updateHandlers();
-          moveTimeout = setTimeout(() => {
+        try {
+          if (key === "delay") {
+            clearTimeout(moveTimeout);
+            responseDelay = value;
+            window.__MSW_STORYBOOK__.preserveHandlers = true; // Preserve existing handlers
+            updateHandlers(true); // Preserve existing handlers
+            moveTimeout = setTimeout(() => {
+              channel.emit(FORCE_REMOUNT, { storyId: ctx.id });
+            }, 500);
+          }
+          if (key === "status") {
+            status = value;
+            window.__MSW_STORYBOOK__.preserveHandlers = true; // Preserve existing handlers
+            updateHandlers(true); // Preserve existing handlers
             channel.emit(FORCE_REMOUNT, { storyId: ctx.id });
-          }, 500);
-        }
-        if (key === "status") {
-          status = value;
-          updateHandlers();
-          channel.emit(FORCE_REMOUNT, { storyId: ctx.id });
-        }
-        const responseObject = {
-          delay: responseDelay,
-          status: status,
-          responses: window.__MSW_STORYBOOK__.handlersMap,
-        };
-        emit(EVENTS.SEND, responseObject);
-      },
-      [EVENTS.UPDATE_RESPONSES]: ({ key, objectKey, objectValue }) => {
-        if (key === "responses") {
-          window.__MSW_STORYBOOK__.handlersMap[objectKey].response = {
-            ...window.__MSW_STORYBOOK__.handlersMap[objectKey].response,
-            jsonBodyData: objectValue,
-          };
-          updateHandlers();
+          }
           const responseObject = {
             delay: responseDelay,
             status: status,
             responses: window.__MSW_STORYBOOK__.handlersMap,
           };
           emit(EVENTS.SEND, responseObject);
-          channel.emit(FORCE_REMOUNT, { storyId: ctx.id });
+        } catch (error) {
+          console.error("Failed to update handlers:", error);
+        }
+      },
+      [EVENTS.UPDATE_RESPONSES]: ({ key, objectKey, objectValue }) => {
+        try {
+          if (key === "responses") {
+            window.__MSW_STORYBOOK__.handlersMap[objectKey].response = {
+              ...window.__MSW_STORYBOOK__.handlersMap[objectKey].response,
+              jsonBodyData: objectValue,
+            };
+            window.__MSW_STORYBOOK__.preserveHandlers = true; // Preserve existing handlers
+            updateHandlers(true); // Preserve existing handlers
+            const responseObject = {
+              delay: responseDelay,
+              status: status,
+              responses: window.__MSW_STORYBOOK__.handlersMap,
+            };
+            emit(EVENTS.SEND, responseObject);
+            channel.emit(FORCE_REMOUNT, { storyId: ctx.id });
+          }
+        } catch (error) {
+          console.error("Failed to update responses:", error);
         }
       },
       [EVENTS.RESET]: () => {
-        window.__MSW_STORYBOOK__.handlersMap = {};
-        window.__MSW_STORYBOOK__.worker.stop();
-        location.reload();
+        try {
+          window.__MSW_STORYBOOK__.handlersMap = {};
+          window.__MSW_STORYBOOK__.worker.stop();
+          location.reload();
+        } catch (error) {
+          console.error("Failed to reset handlers:", error);
+        }
       },
     });
-    // If this is the first time the story is mounted, send the initial state to the addon panel
+
     if (INITIAL_MOUNT_STATE) {
       logEvents();
       emit(EVENTS.SEND, {
@@ -170,7 +184,6 @@ export const withRoundTrip = (
   return storyFn();
 };
 
-// Listen to request:match events from msw in order to build the handlersMap
 const logEvents = () => {
   const worker = window.__MSW_STORYBOOK__.worker;
   if (!Array.isArray(window.__MSW_STORYBOOK__.handlers)) {
@@ -182,42 +195,35 @@ const logEvents = () => {
     window.__MSW_STORYBOOK__.handlers = joinedHandlers;
   }
 
-  worker.events.on("request:match", async ({ request, requestId }) => {
+  worker.events.on("request:match", async ({ request }) => {
     if (SET_INITIAL_RESPONSES) return;
-    let { handler, response } = await getResponse(
-      window.__MSW_STORYBOOK__.handlers || [],
-      request,
-    );
-    let responseObj = {} as {
-      jsonBodyData: JSON;
-      status: number;
-      delay: number;
-    };
-    let responseData = await response.json();
-    if (response && handler) {
-      if (
-        window.__MSW_STORYBOOK__.handlersMap[handler.info.header] &&
-        window.__MSW_STORYBOOK__.handlersMap[handler.info.header].response
-      ) {
-        responseObj.jsonBodyData = responseData;
-      }
-
-      window.__MSW_STORYBOOK__.handlersMap[handler.info.header] = {
-        handler: handler,
-        response: {
-          ...response,
-          jsonBodyData: responseData,
+    try {
+      const { handler, response } = await getResponse(
+        window.__MSW_STORYBOOK__.handlers || [],
+        request,
+      );
+      const responseData = await response.json();
+      if (response && handler) {
+        window.__MSW_STORYBOOK__.handlersMap[handler.info.header] = {
+          handler: handler,
+          response: {
+            ...response,
+            jsonBodyData: responseData,
+            delay: responseDelay,
+            status: response.status,
+          },
+        };
+        window.__MSW_STORYBOOK__.preserveHandlers = true; // Preserve existing handlers
+        updateHandlers(true); // Preserve existing handlers
+        emit(EVENTS.SEND, {
           delay: responseDelay,
-          status: response.status,
-        },
-      };
-      updateHandlers();
-      emit(EVENTS.SEND, {
-        delay: responseDelay,
-        status: status,
-        responses: window.__MSW_STORYBOOK__.handlersMap,
-      });
-      SET_INITIAL_RESPONSES = true;
+          status: status,
+          responses: window.__MSW_STORYBOOK__.handlersMap,
+        });
+        SET_INITIAL_RESPONSES = true;
+      }
+    } catch (error) {
+      console.error("Failed to log events:", error);
     }
   });
 };

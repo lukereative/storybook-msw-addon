@@ -11,6 +11,7 @@ declare global {
   interface Window {
     __MSW_STORYBOOK__: {
       worker?: SetupWorker;
+      preserveHandlers?: boolean;
       handlers?: RequestHandler[];
       handlersMap?: {
         [key: string]: {

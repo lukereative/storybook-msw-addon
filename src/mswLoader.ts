@@ -18,30 +18,26 @@ type Context = {
 let worker: SetupWorker;
 let opt: StartOptions;
 let initialHandlers: RequestHandler[] = [];
+window.__MSW_STORYBOOK__ = window.__MSW_STORYBOOK__ || {};
+window.__MSW_STORYBOOK__.preserveHandlers = false; // Flag to control whether handlers should be preserved
 
-export const initialize = async (options?: StartOptions, handlers: RequestHandler[] = []) => {
+export const initialize = async (
+  options?: StartOptions,
+  handlers: RequestHandler[] = [],
+) => {
   opt = options;
   initialHandlers = handlers;
 };
 
 const setupHandlers = (msw: MswParameters["msw"]) => {
-  if (worker) {
-    worker.resetHandlers(...initialHandlers);
-    if (msw) {
-      if (Array.isArray(msw) && msw.length > 0) {
-        worker.use(...msw);
-      } else if ("handlers" in msw && msw.handlers) {
-        const handlers = Object.values(msw.handlers)
-          .filter(Boolean)
-          .reduce(
-            (handlers, handlersList) => handlers.concat(handlersList),
-            [] as RequestHandler[],
-          );
-
-        if (handlers.length > 0) {
-          worker.use(...handlers);
-        }
-      }
+  if (!worker) {
+    return;
+  }
+  worker.resetHandlers(...initialHandlers);
+  if (msw) {
+    const handlers = Array.isArray(msw) ? msw : msw.handlers;
+    if (handlers && handlers.length > 0) {
+      worker.use(...handlers);
     }
   }
 };
@@ -56,22 +52,23 @@ export const mswLoader = async (context: Context) => {
     return;
   }
 
-  if (window.__MSW_STORYBOOK__ && window.__MSW_STORYBOOK__.worker) {
-    return;
-  }
+  try {
+    if (window.__MSW_STORYBOOK__?.worker) {
+      worker = window.__MSW_STORYBOOK__.worker;
+    } else {
+      worker = setupWorker();
+      await worker.start(opt);
+    }
 
-  if (viewMode === "docs" && window.__MSW_STORYBOOK__ && window.__MSW_STORYBOOK__.worker) {
-    worker = window.__MSW_STORYBOOK__.worker;
-  } else {
-    worker = setupWorker();
-  }
+    if (!window.__MSW_STORYBOOK__.preserveHandlers) {
+      setupHandlers(msw);
+    }
 
-  await worker.start(opt);
-  setupHandlers(msw);
-
-  if (worker) {
-    window.__MSW_STORYBOOK__ = window.__MSW_STORYBOOK__ || {};
     window.__MSW_STORYBOOK__.worker = worker;
+    window.__MSW_STORYBOOK__.preserveHandlers = false;
+  } catch (error) {
+    console.error("Failed to start MSW worker:", error);
   }
+
   return {};
 };

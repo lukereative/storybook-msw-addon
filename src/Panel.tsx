@@ -17,6 +17,7 @@ interface PanelProps {
 
 const Container = styled.div`
   box-shadow: rgb(0 0 0 / 10%) 0px 1px 3px 0px;
+  container-type: inline-size;
 
   & > div:not(:first-child) {
     border-block-start: 1px solid ${({ theme }) => theme.appBorderColor};
@@ -30,9 +31,15 @@ const Container = styled.div`
     padding-block: 2rem;
     padding-inline: 1rem;
     display: flex;
-    justify-content: space-between;
     align-items: flex-start;
+    flex-direction: column;
     gap: 1rem;
+  }
+
+  @container (width > 600px) {
+    & > div {
+      flex-direction: row;
+    }
   }
 
   h3 {
@@ -51,16 +58,21 @@ const ObjectControlContainer = styled.div`
 `;
 
 const SBSelect = styled(Select)`
-  inline-size: 100%;
+  inline-size: max-content;
+  max-inline-size: 400px;
 `;
 
 const Label = styled.div`
   margin-bottom: 1rem;
-  flex: 1 0 50%;
+  flex: 0 1 25%;
+
+  & > h3 > strong {
+    font-family: monospace;
+  }
 `;
 
 const ObjectsContainer = styled.div`
-  flex: 1 1 50%;
+  flex: 0 1 75%;
 `;
 
 const SBButton = styled(Button)`
@@ -106,7 +118,7 @@ export const Panel: React.FC<PanelProps> = (props) => {
           <Container>
             <div>
               <Label>
-                <h3>Response Delay : {addonState.delay} ms</h3>
+                <h3>Response Delay: <strong>{addonState.delay}</strong>ms</h3>
                 <p>Set a mock response delay</p>
               </Label>
               <RangeControl
@@ -120,7 +132,7 @@ export const Panel: React.FC<PanelProps> = (props) => {
             </div>
             <div>
               <Label>
-                <h3>Response Status : {addonState.status}</h3>
+                <h3>Response Status: <strong>{addonState.status}</strong></h3>
                 <p>Select a mock response status</p>
               </Label>
               <SBSelect
@@ -172,7 +184,7 @@ export const Panel: React.FC<PanelProps> = (props) => {
                 <h3>Reset</h3>
                 <p>Reset the original mock response data</p>
               </Label>
-              <SBButton onClick={onReset} disabled={!dataHasChanged}>
+              <SBButton size="medium" onClick={onReset} disabled={!dataHasChanged}>
                 Reset Mock Data
               </SBButton>
             </div>
