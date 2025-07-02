@@ -1,4 +1,4 @@
-import type { Renderer, ProjectAnnotations } from "@storybook/types";
+import type { Renderer, ProjectAnnotations } from "storybook/internal/types";
 import { withRoundTrip } from "./withRoundTrip";
 
 const preview: ProjectAnnotations<Renderer> = {

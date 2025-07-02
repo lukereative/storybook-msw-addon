@@ -1,4 +1,4 @@
-import { ProjectAnnotations, Renderer } from '@storybook/types';
+import { ProjectAnnotations, Renderer } from 'storybook/internal/types';
 
 declare const preview: ProjectAnnotations<Renderer>;
 

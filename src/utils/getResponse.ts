@@ -1,4 +1,4 @@
-import { HttpResponse, RequestHandler } from "msw";
+import { DefaultBodyType, HttpResponse, RequestHandler } from "msw";
 import { executeHandlers } from "./executeHandlers";
 import { randomId } from "./randomId";
 
@@ -8,7 +8,7 @@ export const getResponse = async (
 ): Promise<
   | {
       handler: RequestHandler | undefined;
-      response: HttpResponse;
+      response: HttpResponse<DefaultBodyType>;
     }
   | undefined
 > => {
@@ -20,6 +20,6 @@ export const getResponse = async (
 
   return {
     handler: result?.handler,
-    response: result?.response,
+    response: result?.response as HttpResponse<DefaultBodyType>,
   };
 };

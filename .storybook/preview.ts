@@ -1,4 +1,4 @@
-import type { Preview } from "@storybook/react";
+import type { Preview } from "@storybook/react-vite";
 import "../src/styles/globals.scss";
 import { initialize } from "../dist/index.js";
 import { mswLoader } from "../dist/index.js";

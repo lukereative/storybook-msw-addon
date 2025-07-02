@@ -1,10 +1,9 @@
 import * as React from "react";
-import { useAddonState, useChannel } from "@storybook/manager-api";
-import { AddonPanel, Form, ScrollArea, Button } from "@storybook/components";
+import { useAddonState, useChannel } from "storybook/manager-api";
+import { AddonPanel, Form, ScrollArea, Button } from "storybook/internal/components";
 import { ADDON_ID, EVENTS } from "./constants";
-import { RangeControl } from "@storybook/blocks";
-import { ObjectControl } from "@storybook/blocks";
-import { styled } from "@storybook/theming";
+import { RangeControl, ObjectControl } from "@storybook/addon-docs/blocks";
+import { styled } from "storybook/theming";
 import statusTextMap from "./utils/statusMap";
 
 const statusCodes = Object.keys(statusTextMap);
@@ -172,7 +171,6 @@ export const Panel: React.FC<PanelProps> = (props) => {
                           onChange={(value) =>
                             onChangeResponse("responses", key, value)
                           }
-                          theme={undefined}
                         />
                       </ObjectControlContainer>
                     );

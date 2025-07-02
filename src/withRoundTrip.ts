@@ -1,15 +1,15 @@
-import { addons, useChannel } from "@storybook/preview-api";
+import { addons, useChannel } from "storybook/preview-api";
 import { getMethodFunction } from "./utils/getMethodFunction";
 import type {
   Renderer,
   PartialStoryFn as StoryFunction,
   Parameters,
-} from "@storybook/types";
+} from "storybook/internal/types";
 import {
   STORY_CHANGED,
   FORCE_REMOUNT,
   STORY_ARGS_UPDATED,
-} from "@storybook/core-events";
+} from "storybook/internal/core-events";
 import { EVENTS } from "./constants";
 import {
   RequestHandler,
